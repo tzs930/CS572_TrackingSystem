@@ -1,8 +1,6 @@
 
 kalmanObjTracking();
 
-
-
 function kalmanObjTracking
 
  vrep=remApi('remoteApi');
@@ -23,9 +21,12 @@ cameraAngleSpeed = 0.002;
       disp('Connected')
       
       %Handle
-      [returnCode, camera]=vrep.simxGetObjectHandle(clientID,'Vision_sensor',vrep.simx_opmode_blocking);
+      [returnCode, camera] = vrep.simxGetObjectHandle(clientID,'Vision_sensor',vrep.simx_opmode_blocking);
       [returnCode2, motor] = vrep.simxGetObjectHandle(clientID,'Pioneer_p3dx_cameraMotor',vrep.simx_opmode_blocking);
-      
+      [returnCode3, prox]  = vrep.simxGetObjectHandle(clientID,'psensor#3',vrep.simx_opmode_blocking);
+      [rc1, lmotor] = vrep.simxGetObjectHandle(clientID,'Pioneer_p3dx_leftMotor',vrep.simx_opmode_blocking);
+      [rc1, rmotor] = vrep.simxGetObjectHandle(clientID,'Pioneer_p3dx_rightMotor',vrep.simx_opmode_blocking);
+            
       %Other code
       [returnCode,resolution,image]=vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_streaming);
       param = getDefaultParameters();         % get parameters that work well
@@ -39,30 +40,43 @@ cameraAngleSpeed = 0.002;
       utilities = createUtilities(param);
       isTrackInitialized = false;
       
-      
       while true
-           [returnCode,resolution,image]=vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_buffer);
+           [returnCode,resolution,image] = vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_buffer);
+           [clientIDandSensorHandle detectionState detectedPoint detectedObjectHandle detectedSurfaceNormalVector] = vrep.simxReadProximitySensor(clientID, prox, vrep.simx_opmode_streaming);
+           dist = sqrt(detectedPoint(1)^2 + detectedPoint(2)^2 + detectedPoint(3)^2)
            param.image = image;
            trackSingleObject(param); % visualize the results
                       
            % Camera rotation algorithm
            if length(detectedLocation) == 2
-               disp(detectedLocation(1))               
+               % disp( detectedLocation(1) );               
+               disp( dist );
+               if dist > 0.8
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, 2+2*detectedPoint(2) ,vrep.simx_opmode_streaming);
+               elseif dist < 0.5
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -2-2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -2-2*detectedPoint(2) ,vrep.simx_opmode_streaming);
+               elseif dist > 0
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 0 ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, 0 ,vrep.simx_opmode_streaming);
+               end
+               
                if detectedLocation(1) < 92
                    cameraAngle = cameraAngle - cameraAngleSpeed;
-                   vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
+                   %vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
                if detectedLocation(1) > 420
                    cameraAngle = cameraAngle + cameraAngleSpeed;
-                   vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
+                   %vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
            end
                       
       end
       
       showTrajectory();
-      
       vrep.simxFinish(-1);
+      
  end
  vrep.delete();
  
@@ -177,6 +191,7 @@ function accumulateResults()
   utilities.accumulatedTrackings  ...
     = [utilities.accumulatedTrackings; trackedLocation];
 end
+
 %%
 % For illustration purposes, select the initial location used by the Kalman
 % filter.
