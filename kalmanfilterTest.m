@@ -26,6 +26,12 @@ cameraAngleSpeed = 0.002;
       [returnCode3, prox]  = vrep.simxGetObjectHandle(clientID,'psensor#3',vrep.simx_opmode_blocking);
       [rc1, lmotor] = vrep.simxGetObjectHandle(clientID,'Pioneer_p3dx_leftMotor',vrep.simx_opmode_blocking);
       [rc1, rmotor] = vrep.simxGetObjectHandle(clientID,'Pioneer_p3dx_rightMotor',vrep.simx_opmode_blocking);
+      
+      [returnCode, object] = vrep.simxGetObjectHandle(clientID,'Robbie_body#3',vrep.simx_opmode_blocking); 
+      [returnCode,perangle]=vrep.simxGetObjectFloatParameter(clientID,camera,1004,vrep.simx_opmode_streaming);
+      [returnCode,objposit]=vrep.simxGetObjectPosition(clientID,object,camera,vrep.simx_opmode_streaming); 
+
+     
             
       %Other code
       [returnCode,resolution,image]=vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_streaming);
@@ -43,18 +49,25 @@ cameraAngleSpeed = 0.002;
       while true
            [returnCode,resolution,image] = vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_buffer);
            [clientIDandSensorHandle detectionState detectedPoint detectedObjectHandle detectedSurfaceNormalVector] = vrep.simxReadProximitySensor(clientID, prox, vrep.simx_opmode_streaming);
-           dist = sqrt(detectedPoint(1)^2 + detectedPoint(2)^2 + detectedPoint(3)^2)
+           dist = sqrt(detectedPoint(1)^2 + detectedPoint(2)^2 + detectedPoint(3)^2);
            param.image = image;
            trackSingleObject(param); % visualize the results
                       
            % Camera rotation algorithm
            if length(detectedLocation) == 2
-               % disp( detectedLocation(1) );               
-               disp( dist );
-               if dist > 0.8
+               % disp( detectedLocation(1) );
+               perangle=60/180*pi;
+               [returnCode,objposit] = vrep.simxGetObjectPosition(clientID,object,camera,vrep.simx_opmode_buffer);  
+               % px py : actual object pixel point
+               px=0.5*double(512)*(1 - double(objposit(1))/double(objposit(3))/double(tan(0.5*perangle)));
+               py=512 - 0.5*double(512)*(1 + double(objposit(2))/double(objposit(3))/double(tan(0.5*perangle)));
+               disp( [px, py] )
+               disp( detectedLocation )
+               %disp( dist );
+               if dist > 0.9
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, 2+2*detectedPoint(2) ,vrep.simx_opmode_streaming);
-               elseif dist < 0.5
+               elseif dist < 0.7
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, -2-2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, -2-2*detectedPoint(2) ,vrep.simx_opmode_streaming);
                elseif dist > 0
@@ -64,11 +77,11 @@ cameraAngleSpeed = 0.002;
                
                if detectedLocation(1) < 92
                    cameraAngle = cameraAngle - cameraAngleSpeed;
-                   %vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
+                   vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
                if detectedLocation(1) > 420
                    cameraAngle = cameraAngle + cameraAngleSpeed;
-                   %vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
+                   vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
            end
                       
