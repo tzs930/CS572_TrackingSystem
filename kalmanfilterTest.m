@@ -12,7 +12,10 @@ trackedLocation  = [];  % The tracked location
 label            = '';  % Label for the ball
 utilities        = [];  % Utilities used to process the video
 kalmanFilter = [];
-
+preDetection = [];      % Location of dectected object in previous frame
+adjSensibility = 200;
+px= [];
+py= [];
 % Variables for camera rotation algorithm
 cameraAngle = 0.0;
 cameraAngleSpeed = 0.002;
@@ -93,15 +96,15 @@ cameraAngleSpeed = 0.002;
  end
  vrep.delete();
  
- %%
+  %%
  function utilities = createUtilities(param)
   % Create System objects for reading video, displaying video, extracting
   % foreground, and analyzing connected components.
   utilities.videoPlayer = vision.VideoPlayer('Position', [100,100,500,400]);
-  utilities.foregroundDetector = vision.ForegroundDetector(...
-    'NumTrainingFrames', 10, 'InitialVariance', param.segmentationThreshold);
-  utilities.blobAnalyzer = vision.BlobAnalysis('AreaOutputPort', false, ...
-    'MinimumBlobArea', 70, 'CentroidOutputPort', true);
+  utilities.foregroundDetector = vision.ForegroundDetector('NumGaussians', 3, 'AdaptLearningRate', true, ...
+    'NumTrainingFrames', 2, 'InitialVariance', param.segmentationThreshold);
+  utilities.blobAnalyzer = vision.BlobAnalysis('AreaOutputPort', true, ...
+    'MinimumBlobArea', 70, 'CentroidOutputPort', true, 'BoundingBoxOutputPort',true);
 
   utilities.accumulatedImage      = 0;
   utilities.accumulatedDetections = zeros(0, 2);
@@ -168,6 +171,7 @@ function annotateTrackedObject()
   accumulateResults();
   % Combine the foreground mask with the current video frame in order to
   % show the detection result.
+  imshow(utilities.foregroundMask);
   combinedImage = max(repmat(utilities.foregroundMask, [1,1,3]), frame);
 
   if ~isempty(trackedLocation)
@@ -176,6 +180,11 @@ function annotateTrackedObject()
     region(:, 3) = 5;
     combinedImage = insertObjectAnnotation(combinedImage, shape, ...
       region, {label}, 'Color', 'red');
+    shape = 'circle';
+    region = [px py];
+    region(:, 3) = 5;
+    combinedImage = insertObjectAnnotation(combinedImage, shape, ...
+      region, {'GT'}, 'Color', 'red');
   end
   step(utilities.videoPlayer, combinedImage);
 end
@@ -184,13 +193,26 @@ end
 function [detection, isObjectDetected] = detectObject(frame)
   grayImage = frame;
   utilities.foregroundMask = step(utilities.foregroundDetector, grayImage);
-  detection = step(utilities.blobAnalyzer, utilities.foregroundMask);
-  if isempty(detection)
-    isObjectDetected = false;
+  [Area, detections,BB] = step(utilities.blobAnalyzer, utilities.foregroundMask);
+  if isempty(detections)
+      detection = [];
+      isObjectDetected = false;
   else
-    % To simplify the tracking process, only use the first detected object.
-    detection = detection(1, :);
-    isObjectDetected = true;
+    % Use the biggest detected object.
+    if ~isempty(preDetection)
+        validIndex =find(sqrt(sum((detections- repmat(preDetection,size(detections,1),1)).^2,2))<adjSensibility & double(max(BB(:,3:4),[],2)./min(BB(:,3:4),[],2))<5);
+        detections = detections(validIndex,:); % Look for a object around the location of previous
+        Area = Area(validIndex);
+    end
+    if isempty(detections)
+      detection = [];
+      isObjectDetected = false;
+    else
+        [~,biggestDectection] = max(Area);
+        detection = detections(biggestDectection, :);
+        preDetection = detection;
+        isObjectDetected = true;
+    end
   end
 end
 
@@ -198,13 +220,12 @@ end
 % Accumulate video frames, detected locations, and tracked locations to
 % show the trajectory of the ball.
 function accumulateResults()
-  utilities.accumulatedImage      = max(utilities.accumulatedImage, frame);
+  utilities.accumulatedImage  = max(utilities.accumulatedImage, frame);
   utilities.accumulatedDetections ...
     = [utilities.accumulatedDetections; detectedLocation];
   utilities.accumulatedTrackings  ...
     = [utilities.accumulatedTrackings; trackedLocation];
 end
-
 %%
 % For illustration purposes, select the initial location used by the Kalman
 % filter.
