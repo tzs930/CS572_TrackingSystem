@@ -9,15 +9,18 @@ xlim([0,512])
 ylim([0,512])
 xlabel('X-Pixel')
 ylabel('Y-Pixel')
+legend('Kalman Filter','Ground Truth')
 hold off
 
 %%
 hist(errorList,100)
 xlabel('Error(px)')
 ylabel('Timestep')
-disp(mean(errorList))
-disp(mean(gtList))
-disp(mean(detectedList))
+xlim([0,250])
+disp( mean(errorList) )
+disp( std(errorList) )
+disp( mean(gtList) )
+disp( mean(detectedList) )
 
 %%
 function [detectedList, gtList, errorList] = kalmanObjTracking
@@ -105,13 +108,13 @@ timestepUpperbound = 1000;
                disp( ["Error:", error] );
                errorList = [errorList ; error];
                %disp( dist );
-               if detectionState == 0
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -1 ,vrep.simx_opmode_streaming);                   
-                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -1 ,vrep.simx_opmode_streaming);
-               elseif dist > 0.9
+               %if detectionState == 0
+               %    vrep.simxSetJointTargetVelocity(clientID,rmotor, -1 ,vrep.simx_opmode_streaming);                   
+               %    vrep.simxSetJointTargetVelocity(clientID,lmotor, -1 ,vrep.simx_opmode_streaming);
+               if dist > 1
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, 1+detectedPoint(1) ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, 1+detectedPoint(2) ,vrep.simx_opmode_streaming);
-               elseif dist < 0.7
+               elseif dist < 0.8
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, -1-detectedPoint(1) ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, -1-detectedPoint(2) ,vrep.simx_opmode_streaming);
                elseif dist > 0
