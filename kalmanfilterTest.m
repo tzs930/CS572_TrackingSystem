@@ -80,6 +80,7 @@ timestepUpperbound = 1000;
            dist = sqrt(detectedPoint(1)^2 + detectedPoint(2)^2 + detectedPoint(3)^2);
            param.image = image;
            trackSingleObject(param); % visualize the results
+
            % disp( [detectionState] );
            % Camera rotation algorithm
            if length(detectedLocation) == 2
@@ -98,25 +99,22 @@ timestepUpperbound = 1000;
                disp( ["Error:", error] );
                errorList = [errorList ; error];
                %disp( dist );
-               if dist > 0.9 && detectionState == 1
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);
+               if dist > 0.9
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, 2+2*detectedPoint(2) ,vrep.simx_opmode_streaming);
-               elseif dist < 0.7 && detectionState == 1
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -2-2*detectedPoint(1) ,vrep.simx_opmode_streaming);
+               elseif dist < 0.7
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -2-2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, -2-2*detectedPoint(2) ,vrep.simx_opmode_streaming);
-               elseif detectionState == 0
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -2 ,vrep.simx_opmode_streaming);                   
-                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -2 ,vrep.simx_opmode_streaming);
-               else
+               elseif dist > 0
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, 0 ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, 0 ,vrep.simx_opmode_streaming);
                end
                
-               if detectedLocation(1) < 120
+               if detectedLocation(1) < 92
                    cameraAngle = cameraAngle - cameraAngleSpeed;
                    vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
-               if detectedLocation(1) > 392
+               if detectedLocation(1) > 420
                    cameraAngle = cameraAngle + cameraAngleSpeed;
                    vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
@@ -209,7 +207,7 @@ function annotateTrackedObject()
   % Combine the foreground mask with the current video frame in order to
   % show the detection result.
   imshow(utilities.foregroundMask);
-  combinedImage = max(repmat(utilities.foregroundMask, [1,1,3]), frame);
+  combinedImage = frame;
 
   if ~isempty(trackedLocation)
     shape = 'circle';
@@ -221,7 +219,7 @@ function annotateTrackedObject()
     region = [px py];
     region(:, 3) = 5;
     combinedImage = insertObjectAnnotation(combinedImage, shape, ...
-      region, {'GT'}, 'Color', 'green');
+      region, {'GT'}, 'Color', 'red');
   end
   step(utilities.videoPlayer, combinedImage);
 end
