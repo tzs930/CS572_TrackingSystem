@@ -1,10 +1,23 @@
 
-kalmanObjTracking();
+[detectedList, gtList, errorList] = kalmanObjTracking();
 
-function kalmanObjTracking
+plot(detectedList(:,1),detectedList(:,2),'.')
+hold on
+plot(gtList(:,1),gtList(:,2),'r.')
+xlim([0,512])
+ylim([0,512])
+hold off
+
+hist(errorList,100)
+xlabel('Error(px)')
+ylabel('Timestep')
+avg(gtList)
+
+function [detectedList, gtList, errorList] = kalmanObjTracking
 
  vrep=remApi('remoteApi');
  vrep.simxFinish(-1);
+ 
  clientID=vrep.simxStart('127.0.0.1',19999,true,true,5000,5);
 frame            = [];  % A video frame
 detectedLocation = [];  % The detected location
@@ -16,9 +29,19 @@ preDetection = [];      % Location of dectected object in previous frame
 adjSensibility = 200;
 px= [];
 py= [];
+
+global detectedList;
+global gtList;
+global errorList;
+
+detectedList=[];
+gtList=[];
+errorList=[];
+
 % Variables for camera rotation algorithm
 cameraAngle = 0.0;
 cameraAngleSpeed = 0.02;
+timestepUpperbound = 1000;
 
  if (clientID>-1)      
       disp('Connected')
@@ -48,14 +71,16 @@ cameraAngleSpeed = 0.02;
       
       utilities = createUtilities(param);
       isTrackInitialized = false;
-      
-      while true
+      timestep = 0;
+      error = 0;
+      %plotGraph = plot( timestep, error );
+      while timestep < timestepUpperbound
            [returnCode,resolution,image] = vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_buffer);
            [clientIDandSensorHandle detectionState detectedPoint detectedObjectHandle detectedSurfaceNormalVector] = vrep.simxReadProximitySensor(clientID, prox, vrep.simx_opmode_streaming);
            dist = sqrt(detectedPoint(1)^2 + detectedPoint(2)^2 + detectedPoint(3)^2);
            param.image = image;
            trackSingleObject(param); % visualize the results
-           disp( [detectionState] )
+           % disp( [detectionState] );
            % Camera rotation algorithm
            if length(detectedLocation) == 2
                % disp( detectedLocation(1) );
@@ -64,9 +89,14 @@ cameraAngleSpeed = 0.02;
                % px py : actual object pixel point
                px=0.5*double(512)*(1 - double(objposit(1))/double(objposit(3))/double(tan(0.5*perangle)));
                py=512 - 0.5*double(512)*(1 + double(objposit(2))/double(objposit(3))/double(tan(0.5*perangle)));
-               disp( ["Ground Truth:", px, py] )
-               disp( ["Detected:", detectedLocation] )
-               
+               %disp( ["Ground Truth:", px, py] )
+               %disp( ["Detected:", detectedLocation] )
+               gtList = [gtList ; [px,py] ];
+               detectedList = [detectedList ; detectedLocation];
+               error = sqrt( (px-detectedLocation(1))^2 + (py-detectedLocation(2))^2 );
+               %set(plotGraph, 'XData',timestep,'YData',error)
+               disp( ["Error:", error] );
+               errorList = [errorList ; error];
                %disp( dist );
                if dist > 0.9 && detectionState == 1
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);
@@ -90,12 +120,15 @@ cameraAngleSpeed = 0.02;
                    cameraAngle = cameraAngle + cameraAngleSpeed;
                    vrep.simxSetJointTargetPosition(clientID,motor,cameraAngle,vrep.simx_opmode_streaming);
                end
+               timestep = timestep + 1
            end
                       
       end
       
-      showTrajectory();
+      %showTrajectory();
       vrep.simxFinish(-1);
+      
+      %return gtList, detectedList, errorList
       
  end
  vrep.delete();
