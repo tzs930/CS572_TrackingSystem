@@ -51,7 +51,7 @@ errorList=[];
 % Variables for camera rotation algorithm
 cameraAngle = 0.0;
 cameraAngleSpeed = 0.02;
-timestepUpperbound = 1000;
+timestepUpperbound = 500;
 
  if (clientID>-1)      
       disp('Connected')
@@ -84,6 +84,7 @@ timestepUpperbound = 1000;
       timestep = 0;
       error = 0;
       %plotGraph = plot( timestep, error );
+      open(utilities.videoWriter);
       while timestep < timestepUpperbound
            [returnCode,resolution,image] = vrep.simxGetVisionSensorImage2(clientID,camera,1,vrep.simx_opmode_buffer);
            [clientIDandSensorHandle detectionState detectedPoint detectedObjectHandle detectedSurfaceNormalVector] = vrep.simxReadProximitySensor(clientID, prox, vrep.simx_opmode_streaming);
@@ -108,15 +109,15 @@ timestepUpperbound = 1000;
                disp( ["Error:", error] );
                errorList = [errorList ; error];
                %disp( dist );
-               %if detectionState == 0
-               %    vrep.simxSetJointTargetVelocity(clientID,rmotor, -1 ,vrep.simx_opmode_streaming);                   
-               %    vrep.simxSetJointTargetVelocity(clientID,lmotor, -1 ,vrep.simx_opmode_streaming);
-               if dist > 1
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 1+detectedPoint(1) ,vrep.simx_opmode_streaming);                   
-                   vrep.simxSetJointTargetVelocity(clientID,lmotor, 1+detectedPoint(2) ,vrep.simx_opmode_streaming);
+               if detectionState == 0
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -1 ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -1 ,vrep.simx_opmode_streaming);
+               elseif dist > 1.2
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, 2+2*detectedPoint(2) ,vrep.simx_opmode_streaming);
                elseif dist < 0.8
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -1-detectedPoint(1) ,vrep.simx_opmode_streaming);                   
-                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -1-detectedPoint(2) ,vrep.simx_opmode_streaming);
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -2-2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -2-2*detectedPoint(2) ,vrep.simx_opmode_streaming);
                elseif dist > 0
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, 0 ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, 0 ,vrep.simx_opmode_streaming);
@@ -135,7 +136,7 @@ timestepUpperbound = 1000;
            end
                       
       end
-      
+      close(utilities.videoWriter);
       %showTrajectory();
       vrep.simxFinish(-1);
       
@@ -148,12 +149,17 @@ timestepUpperbound = 1000;
  function utilities = createUtilities(param)
   % Create System objects for reading video, displaying video, extracting
   % foreground, and analyzing connected components.
-  utilities.videoPlayer = vision.VideoPlayer('Position', [100,100,500,400]);
+  utilities.videoPlayer = vision.VideoPlayer('Position', [100,100,500,400]);  
   utilities.foregroundDetector = vision.ForegroundDetector('NumGaussians', 3, 'AdaptLearningRate', true, ...
     'NumTrainingFrames', 2, 'InitialVariance', param.segmentationThreshold);
   utilities.blobAnalyzer = vision.BlobAnalysis('AreaOutputPort', true, ...
     'MinimumBlobArea', 70, 'CentroidOutputPort', true, 'BoundingBoxOutputPort',true);
 
+  % add videowriter
+  utilities.videoWriter = VideoWriter('demo.avi');  
+  utilities.videoWriter.FrameRate = 20;
+  utilities.videoWriter.Quality = 100;
+  
   utilities.accumulatedImage      = 0;
   utilities.accumulatedDetections = zeros(0, 2);
   utilities.accumulatedTrackings  = zeros(0, 2);
@@ -243,6 +249,7 @@ function annotateTrackedObject()
    end
   end
   step(utilities.videoPlayer, combinedImage);
+  writeVideo(utilities.videoWriter, combinedImage);
 end
 
 % Detect the ball in the current video frame.
