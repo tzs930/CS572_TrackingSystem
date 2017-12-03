@@ -1,18 +1,25 @@
 
 [detectedList, gtList, errorList] = kalmanObjTracking();
 
+%%
 plot(detectedList(:,1),detectedList(:,2),'.')
 hold on
 plot(gtList(:,1),gtList(:,2),'r.')
 xlim([0,512])
 ylim([0,512])
+xlabel('X-Pixel')
+ylabel('Y-Pixel')
 hold off
 
+%%
 hist(errorList,100)
 xlabel('Error(px)')
 ylabel('Timestep')
-avg(gtList)
+disp(mean(errorList))
+disp(mean(gtList))
+disp(mean(detectedList))
 
+%%
 function [detectedList, gtList, errorList] = kalmanObjTracking
 
  vrep=remApi('remoteApi');
@@ -95,20 +102,23 @@ timestepUpperbound = 1000;
                gtList = [gtList ; [px,py] ];
                detectedList = [detectedList ; detectedLocation];
                error = sqrt( (px-detectedLocation(1))^2 + (py-detectedLocation(2))^2 );
-               %set(plotGraph, 'XData',timestep,'YData',error)
                disp( ["Error:", error] );
                errorList = [errorList ; error];
                %disp( dist );
-               if dist > 0.9
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 2+2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
-                   vrep.simxSetJointTargetVelocity(clientID,lmotor, 2+2*detectedPoint(2) ,vrep.simx_opmode_streaming);
+               if detectionState == 0
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -1 ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -1 ,vrep.simx_opmode_streaming);
+               elseif dist > 0.9
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, 1+detectedPoint(1) ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, 1+detectedPoint(2) ,vrep.simx_opmode_streaming);
                elseif dist < 0.7
-                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -2-2*detectedPoint(1) ,vrep.simx_opmode_streaming);                   
-                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -2-2*detectedPoint(2) ,vrep.simx_opmode_streaming);
+                   vrep.simxSetJointTargetVelocity(clientID,rmotor, -1-detectedPoint(1) ,vrep.simx_opmode_streaming);                   
+                   vrep.simxSetJointTargetVelocity(clientID,lmotor, -1-detectedPoint(2) ,vrep.simx_opmode_streaming);
                elseif dist > 0
                    vrep.simxSetJointTargetVelocity(clientID,rmotor, 0 ,vrep.simx_opmode_streaming);                   
                    vrep.simxSetJointTargetVelocity(clientID,lmotor, 0 ,vrep.simx_opmode_streaming);
                end
+               
                
                if detectedLocation(1) < 92
                    cameraAngle = cameraAngle - cameraAngleSpeed;
@@ -207,7 +217,7 @@ function annotateTrackedObject()
   % Combine the foreground mask with the current video frame in order to
   % show the detection result.
   imshow(utilities.foregroundMask);
-  combinedImage = frame;
+  combinedImage = repmat(frame, [1,1,3]);
 
   if ~isempty(trackedLocation)
     shape = 'circle';
@@ -219,7 +229,15 @@ function annotateTrackedObject()
     region = [px py];
     region(:, 3) = 5;
     combinedImage = insertObjectAnnotation(combinedImage, shape, ...
-      region, {'GT'}, 'Color', 'red');
+      region, {'GT'}, 'Color', 'green');
+   if ~isempty([px py])
+        error =sqrt(sum((trackedLocation(1,1:2) - [px py]).^2));
+        shape = 'circle';
+        region = [1 1];
+        region(:, 3) = 5;
+        combinedImage = insertObjectAnnotation(combinedImage, shape, ...
+        region, {sprintf('error: %0.2f',error)}, 'Color', 'white');
+   end
   end
   step(utilities.videoPlayer, combinedImage);
 end
